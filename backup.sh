@@ -77,12 +77,14 @@ if [ ! -d "$SRC" ]; then
     log_error "Source directory does not exist: $SRC"
     exit 1
 fi
+log_message "Using source directory: $SRC"
 
 # Check if rclone config file exists
 if [ ! -f "$RCLONE_CONFIG" ]; then
     log_error "rclone config file not found: $RCLONE_CONFIG"
     exit 1
 fi
+log_message "Using rclone config: $RCLONE_CONFIG"
 
 # Create backup filename with timestamp
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
@@ -98,8 +100,9 @@ if ! tar -czf "$TEMP_BACKUP" -C "$(dirname "$SRC")" "$(basename "$SRC")"; then
 fi
 
 # Upload backup file
+# Important: `--s3-no-check-bucket` is required for cloudflare r2
 log_message "Uploading backup to remote destination..."
-if ! rclone --config "$RCLONE_CONFIG" copy "$TEMP_BACKUP" "$DEST"; then
+if ! rclone --config "$RCLONE_CONFIG" copy "$TEMP_BACKUP" "$DEST" --s3-no-check-bucket; then
     log_error "Failed to upload backup"
     rm -f "$TEMP_BACKUP"
     exit 1
