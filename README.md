@@ -16,7 +16,7 @@ chmod +x backup.sh
 Back up your data with the following command:
 
 ```bash
-./backup.sh SOURCE DESTINATION
+./backup.sh <src> <dest>
 ```
 
 You can use `--help` to see more options:
@@ -42,9 +42,9 @@ Example:
 
 ## Example Senario
 
-I want to backup `/home/blocklune/docker_data` to my Cloudflare R2 storage. The bucket name is `rclone`, and the directory in it is `docker_data_backup`.
+I want to backup `/home/blocklune/docker_data` to my Cloudflare R2 storage. The r2 bucket name is `rclone`, and the directory in it is `docker_data_backup`.
 
-My rclone configuration file is located at `/root/.config/rclone/rclone.conf`.
+My rclone configuration file is located at `/root/.config/rclone/rclone.conf` and looks like this:
 
 ```text
 [r2]
