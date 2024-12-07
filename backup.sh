@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/usr/bin/env bash
 
 MAX_FILES=3
 RCLONE_CONFIG="${HOME}/.config/rclone/rclone.conf"
@@ -16,7 +16,7 @@ log_error() {
 
 print_usage() {
     cat << EOF
-Usage: $(basename "$0") [OPTIONS] <src> <dest>
+Usage: $(basename "$0") [OPTIONS] <src> <dest>...
 
 Backup directory using tar and rclone.
 
@@ -27,11 +27,11 @@ Options:
 
 Arguments:
   src                   Source directory to backup
-  dest                  Destination path (rclone remote)
+  dest                  Destination path(s) (rclone remote)
 
 Example:
   $(basename "$0") /path/to/backup remote:backup/
-  $(basename "$0") --max-files=5 /path/to/backup remote:backup/
+  $(basename "$0") --max-files=5 /path/to/backup remote1:backup/ remote2:backup/
 EOF
 }
 
@@ -54,11 +54,10 @@ while [ $# -gt 0 ]; do
         *)
             if [ -z "$SRC" ]; then
                 SRC="$1"
-            elif [ -z "$DEST" ]; then
-                DEST="$1"
+            elif [ -z "$DESTS" ]; then
+                DESTS=("$1")
             else
-                log_error "Too many arguments"
-                exit 1
+                DESTS+=("$1")
             fi
             ;;
     esac
@@ -66,8 +65,9 @@ while [ $# -gt 0 ]; do
 done
 
 # Check required parameters
-if [ -z "$SRC" ] || [ -z "$DEST" ]; then
-    log_error "Source and destination must be specified"
+# shellcheck disable=SC2128
+if [ -z "$SRC" ] || [ -z "$DESTS" ]; then
+    log_error "Source and at least one destination must be specified"
     print_usage
     exit 1
 fi
@@ -99,39 +99,40 @@ if ! tar -czf "$TEMP_BACKUP" -C "$(dirname "$SRC")" "$(basename "$SRC")"; then
     exit 1
 fi
 
-# Upload backup file
-# Important: `--s3-no-check-bucket` is required for cloudflare r2
-log_message "Uploading backup to remote destination..."
-if ! rclone --config "$RCLONE_CONFIG" copy "$TEMP_BACKUP" "$DEST" --s3-no-check-bucket; then
-    log_error "Failed to upload backup"
-    rm -f "$TEMP_BACKUP"
-    exit 1
-fi
+# Upload backup file to all destinations
+log_message "Uploading backup to remote destinations..."
+for DEST in "${DESTS[@]}"; do
+    log_message "Uploading to: $DEST"
+    if ! rclone --config "$RCLONE_CONFIG" copy "$TEMP_BACKUP" "$DEST" --s3-no-check-bucket; then
+        log_error "Failed to upload backup to $DEST"
+        rm -f "$TEMP_BACKUP"
+        exit 1
+    fi
+done
 
 # Clean up temporary file
 rm -f "$TEMP_BACKUP"
 
-# Check and remove old backups if max files limit is set
+# Check and remove old backups for each destination
 if [ "$MAX_FILES" -gt 0 ]; then
-    log_message "Checking backup count..."
-    # Get remote file list and sort by name
-    BACKUP_LIST=$(rclone --config "$RCLONE_CONFIG" lsf "$DEST" | grep '\.tar\.gz$' | sort)
-    BACKUP_COUNT=$(echo "$BACKUP_LIST" | wc -l)
-    
-    if [ "$BACKUP_COUNT" -gt "$MAX_FILES" ]; then
-        # Calculate number of files to delete
-        DELETE_COUNT=$((BACKUP_COUNT - MAX_FILES))
-        # Get list of files to delete
-        FILES_TO_DELETE=$(echo "$BACKUP_LIST" | head -n "$DELETE_COUNT")
+    log_message "Checking backup count for all destinations..."
+    for DEST in "${DESTS[@]}"; do
+        BACKUP_LIST=$(rclone --config "$RCLONE_CONFIG" lsf "$DEST" | grep '\.tar\.gz$' | sort)
+        BACKUP_COUNT=$(echo "$BACKUP_LIST" | wc -l)
         
-        log_message "Removing old backups..."
-        echo "$FILES_TO_DELETE" | while read -r file; do
-            if [ -n "$file" ]; then
-                log_message "Deleting: $file"
-                rclone --config "$RCLONE_CONFIG" delete "$DEST/$file"
-            fi
-        done
-    fi
+        if [ "$BACKUP_COUNT" -gt "$MAX_FILES" ]; then
+            DELETE_COUNT=$((BACKUP_COUNT - MAX_FILES))
+            FILES_TO_DELETE=$(echo "$BACKUP_LIST" | head -n "$DELETE_COUNT")
+            
+            log_message "Removing old backups from $DEST..."
+            echo "$FILES_TO_DELETE" | while read -r file; do
+                if [ -n "$file" ]; then
+                    log_message "Deleting: $file from $DEST"
+                    rclone --config "$RCLONE_CONFIG" delete "$DEST/$file"
+                fi
+            done
+        fi
+    done
 fi
 
 log_message "Backup completed successfully"

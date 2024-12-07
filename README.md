@@ -13,16 +13,16 @@ curl -O https://raw.githubusercontent.com/BlockLune/rclone-backup/refs/heads/mai
 chmod +x backup.sh
 ```
 
-Back up your data with the following command:
+Back up your data with the following command (Replace `<src>` with the source directory and `<dest>` with the destination path. Multiple destinations are supported):
 
 ```bash
-./backup.sh <src> <dest>
+./backup.sh <src> <dest>...
 ```
 
 You can use `--help` to see more options:
 
 ```text
-Usage: backup.sh [OPTIONS] <src> <dest>
+Usage: backup.sh [OPTIONS] <src> <dest>...
 
 Backup directory using tar and rclone.
 
@@ -33,11 +33,11 @@ Options:
 
 Arguments:
   src                   Source directory to backup
-  dest                  Destination path (rclone remote)
+  dest                  Destination path(s) (rclone remote)
 
 Example:
   backup.sh /path/to/backup remote:backup/
-  backup.sh --max-files=5 /path/to/backup remote:backup/
+  backup.sh --max-files=5 /path/to/backup remote1:backup/ remote2:backup/
 ```
 
 ## Example Senario
